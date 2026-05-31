@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
-CircHIT Backend
----------------
+CircHIT Backend (updated)
+-------------------------
 Guide design (linear / circular) using FD scores and genome‑wide
 off‑target scanner.
 
-Exposes:
-  - load_fd_scores(csv_path) -> dict
-  - analyse_linear_sequence(seq, terms, gblock_tail, fd_map) -> DataFrame
-  - analyse_sequence(upstream, downstream, terms, linearoverhang, ...) -> tuple
-  - get_24nt_guide(rc_target: str) -> str
-  - build_stage1(fasta, fd_csv, out_tsv)
-  - score_single_guide(in_tsv, guide, top_n, mm_cutoff, ...) -> List[dict]
-  - run_off_target_for_guide(guide, workdir, ...) -> List[dict]
+Column changes:
+- "Term" removed.
+- "Adjusted Term" → "PFS Motif"
+- "gBlock" → "DNA oligo for IVT"
+
+FD scores are now large integers (e.g., TAAGT=526) from the
+new Raw_PFS_FD.csv file.
 """
 
 import os
@@ -46,12 +45,12 @@ DEFAULT_TERMS = [
 DEFAULT_GBLOCK_TAIL = "ATCTACAATAGTAGAAATTTACCCTATAGTGAGTCGTATTACAG"
 
 # ----------------------------------------------------------------------
-# 2. FD score loading
+# 2. FD score loading (unchanged – expects PFS,FD CSV)
 # ----------------------------------------------------------------------
 
 def load_fd_scores(csv_path: str) -> Dict[str, float]:
     """
-    Reads a CSV with columns PFS,FD (same format as Raw_PFS_FD.csv).
+    Reads a CSV with columns PFS,FD.
     Returns a dict mapping 5‑mer (upper case, T) → highest FD value.
     """
     fd_map: Dict[str, float] = {}
@@ -109,12 +108,14 @@ def get_24nt_guide(rc_target: str) -> str:
 
 
 # ----------------------------------------------------------------------
-# 4. Guide designer (linear & circular) – FD scoring only
+# 4. Guide designer (linear & circular) – updated column names
 # ----------------------------------------------------------------------
 
 def analyse_linear_sequence(sequence, terms=None, gblock_tail=None, fd_map=None):
     """
     Linear mode. 28‑nt target region.  Uses FD scores from fd_map.
+    Output columns: PFS Motif, PFS Score, Target Region, RC Target Region,
+                    GC % in sequence, DNA oligo for IVT
     """
     sequence = sequence.upper()
     terms = terms if terms is not None else DEFAULT_TERMS
@@ -143,13 +144,12 @@ def analyse_linear_sequence(sequence, terms=None, gblock_tail=None, fd_map=None)
             gblock_sequence = target_region + gblock_tail
 
             results.append({
-                "Term": term,
-                "Adjusted Term": adjusted_term,
+                "PFS Motif": adjusted_term,
                 "PFS Score": pfs_score,
                 "Target Region": target_region,
                 "RC Target Region": rc_target,
                 "GC % in sequence": gc_percent,
-                "gBlock": gblock_sequence
+                "DNA oligo for IVT": gblock_sequence
             })
 
     df = pd.DataFrame(results)
@@ -166,6 +166,9 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
     """
     Circular mode. 24‑nt target region.  Uses FD scores.
     Returns (truncated_seq, truncated_upstream, truncated_downstream, bsj_site, df)
+    Output columns: PFS Motif, PFS Score, Within BSJ, Closest distance from BSJ,
+                    Target Region, RC Target Region, GC % in sequence,
+                    Linear Sequence Overhang Similarity Percent, DNA oligo for IVT
     """
     terms = terms if terms is not None else DEFAULT_TERMS
     gblock_tail = gblock_tail if gblock_tail is not None else DEFAULT_GBLOCK_TAIL
@@ -210,8 +213,7 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
             gblock_sequence = target_sequence + gblock_tail
 
             results.append({
-                "Term": term,
-                "Adjusted Term": adjusted_sequence,
+                "PFS Motif": adjusted_sequence,
                 "PFS Score": pfs_score,
                 "Within BSJ": within_bsj,
                 "Closest distance from BSJ": bsj_distance,
@@ -219,7 +221,7 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
                 "RC Target Region": rc_target_sequence,
                 "GC % in sequence": gc_percent,
                 "Linear Sequence Overhang Similarity Percent": linear_overlap_percent,
-                "gBlock": gblock_sequence
+                "DNA oligo for IVT": gblock_sequence
             })
 
     df = pd.DataFrame(results)
@@ -228,6 +230,7 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
     df = df.sort_values(by="PFS Score", ascending=False)
     df = df.drop_duplicates(subset=["Closest distance from BSJ"], keep="first")
     return truncated_sequence, truncated_upstream, truncated_downstream, bsj_site, df
+
 
 
 # ----------------------------------------------------------------------
