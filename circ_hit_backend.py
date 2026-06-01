@@ -108,14 +108,14 @@ def get_24nt_guide(rc_target: str) -> str:
 
 
 # ----------------------------------------------------------------------
-# 4. Guide designer (linear & circular) – updated column names
+# 4. Guide designer (linear & circular) – with guideRNA, renamed oligo, column reorder
 # ----------------------------------------------------------------------
 
 def analyse_linear_sequence(sequence, terms=None, gblock_tail=None, fd_map=None):
     """
     Linear mode. 28‑nt target region.  Uses FD scores from fd_map.
     Output columns: PFS Motif, PFS Score, Target Region, RC Target Region,
-                    GC % in sequence, DNA oligo for IVT
+                    guideRNA, DNA oligo for T7 IVT, GC % in sequence
     """
     sequence = sequence.upper()
     terms = terms if terms is not None else DEFAULT_TERMS
@@ -143,18 +143,29 @@ def analyse_linear_sequence(sequence, terms=None, gblock_tail=None, fd_map=None)
             pfs_score = fd_map.get(adjusted_term, 0.0)
             gblock_sequence = target_region + gblock_tail
 
+            # Build guideRNA: conserved region + RC target converted to RNA (T→U)
+            rna_rc_target = rc_target.replace('T', 'U')
+            guide_rna = "UAAAUUUCUACUAUUGUAGAU" + rna_rc_target
+
             results.append({
                 "PFS Motif": adjusted_term,
                 "PFS Score": pfs_score,
                 "Target Region": target_region,
                 "RC Target Region": rc_target,
+                "guideRNA": guide_rna,
+                "DNA oligo for T7 IVT": gblock_sequence,
                 "GC % in sequence": gc_percent,
-                "DNA oligo for IVT": gblock_sequence
             })
 
     df = pd.DataFrame(results)
     if df.empty:
         return df
+    # Ensure column order
+    desired_order = [
+        "PFS Motif", "PFS Score", "Target Region", "RC Target Region",
+        "guideRNA", "DNA oligo for T7 IVT", "GC % in sequence"
+    ]
+    df = df[desired_order]
     df = df.sort_values(by="PFS Score", ascending=False)
     df = df.drop_duplicates(subset=["Target Region"], keep="first")
     return df
@@ -167,8 +178,9 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
     Circular mode. 24‑nt target region.  Uses FD scores.
     Returns (truncated_seq, truncated_upstream, truncated_downstream, bsj_site, df)
     Output columns: PFS Motif, PFS Score, Within BSJ, Closest distance from BSJ,
-                    Target Region, RC Target Region, GC % in sequence,
-                    Linear Sequence Overhang Similarity Percent, DNA oligo for IVT
+                    Target Region, RC Target Region, guideRNA,
+                    DNA oligo for T7 IVT, GC % in sequence,
+                    Linear Sequence Overhang Similarity Percent (last)
     """
     terms = terms if terms is not None else DEFAULT_TERMS
     gblock_tail = gblock_tail if gblock_tail is not None else DEFAULT_GBLOCK_TAIL
@@ -212,6 +224,10 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
             pfs_score = fd_map.get(adjusted_sequence, 0.0)
             gblock_sequence = target_sequence + gblock_tail
 
+            # Build guideRNA: conserved region + RC target converted to RNA (T→U)
+            rna_rc_target = rc_target_sequence.replace('T', 'U')
+            guide_rna = "UAAAUUUCUACUAUUGUAGAU" + rna_rc_target
+
             results.append({
                 "PFS Motif": adjusted_sequence,
                 "PFS Score": pfs_score,
@@ -219,20 +235,27 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
                 "Closest distance from BSJ": bsj_distance,
                 "Target Region": target_sequence,
                 "RC Target Region": rc_target_sequence,
+                "guideRNA": guide_rna,
+                "DNA oligo for T7 IVT": gblock_sequence,
                 "GC % in sequence": gc_percent,
                 "Linear Sequence Overhang Similarity Percent": linear_overlap_percent,
-                "DNA oligo for IVT": gblock_sequence
             })
 
     df = pd.DataFrame(results)
     if df.empty:
         return truncated_sequence, truncated_upstream, truncated_downstream, bsj_site, df
+
+    # Enforce column order – linear overhang last
+    desired_order = [
+        "PFS Motif", "PFS Score", "Within BSJ", "Closest distance from BSJ",
+        "Target Region", "RC Target Region", "guideRNA",
+        "DNA oligo for T7 IVT", "GC % in sequence",
+        "Linear Sequence Overhang Similarity Percent"
+    ]
+    df = df[desired_order]
     df = df.sort_values(by="PFS Score", ascending=False)
     df = df.drop_duplicates(subset=["Closest distance from BSJ"], keep="first")
     return truncated_sequence, truncated_upstream, truncated_downstream, bsj_site, df
-
-
-
 # ----------------------------------------------------------------------
 # 5. Off‑target pipeline (Stage 1 + Stage 2)
 # ----------------------------------------------------------------------
