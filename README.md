@@ -28,7 +28,10 @@ For a circular RNA, you are asked for three sequence components:
 * **Downstream sequence:** The part *before* the back‑splice junction. In the linear representation, this sits before the upstream sequence.
 * **Linear overhang:** The region further upstream of the acceptor exon (i.e. extending 5' from the upstream sequence). It is used to assess similarity between the circular target and the linear pre‑mRNA, helping to avoid guides that also match the unspliced transcript.
 
-**Example layout (linearised circle):**
+**In Canonical Sequence:**
+`5' – [linear overhang] – [upstream] – [internal exons] – [downstream] – 3'`
+
+**In Linearised Circular Sequence:**
 `5' – [downstream] – [BSJ] – [upstream] – [linear overhang] – 3'`
 
 ---
