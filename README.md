@@ -43,7 +43,6 @@ For a circular RNA, you are asked for three sequence components:
 | Column | Meaning |
 | --- | --- |
 | **Term** | The PFS motif that was found. |
-| **Adjusted Term** | Motif padded to a full 5‑mer if needed. |
 | **PFS Score** | Fold‑Depletion (FD) score. Higher = better. |
 | **Within BSJ (circ only)** | True if the PFS is within 1 nt of the BSJ. |
 | **Closest distance from BSJ** | Distance from the PFS to the BSJ. Negative values mean the motif starts in the downstream exon; positive = in the upstream. |
