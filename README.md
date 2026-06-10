@@ -47,7 +47,7 @@ For a circular RNA, you are asked for three sequence components:
 | **PFS Score** | Fold‑Depletion (FD) score. Higher = better. |
 | **Within BSJ (circ only)** | True if the PFS is within 1 nt of the BSJ. |
 | **Closest distance from BSJ** | Distance from the PFS to the BSJ. Negative values mean the motif starts in the downstream exon; positive = in the upstream. |
-| **Target Region** | The 24‑nt (circ) or 28‑nt (linear) window immediately upstream of the PFS. |
+| **Target Region** | The 24‑nt window immediately upstream of the PFS. |
 | **RC Target Region** | Reverse‑complement of the target region. **THIS IS YOUR CANDIDATE gRNA SEQUENCE.** |
 | **GC % in sequence** | GC content of the RC target. |
 | **Linear Overlap Similarity %** | How similar the target is to the linear overhang (circ only). Low values are safer. |
