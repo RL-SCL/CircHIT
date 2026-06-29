@@ -88,15 +88,6 @@ def GC_calc(fa_string):
         return 0.0
     return (_G + _C) / len(_string) * 100
 
-def compare_sequence_similarity(A: str, B: str) -> float:
-    if len(B) > len(A):
-        return 0.0
-    if len(B) == 0:
-        return 0.0
-    truncated_A = A[-len(B):]
-    matches = sum(1 for a, b in zip(truncated_A, B) if a == b)
-    return (matches / len(B)) * 100
-
 def get_24nt_guide(rc_target: str) -> str:
     """
     Given a reverse‑complement target region (any length ≥ 24),
@@ -171,16 +162,17 @@ def analyse_linear_sequence(sequence, terms=None, gblock_tail=None, fd_map=None)
     return df
 
 
-def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
+def analyse_sequence(upstream, downstream, terms=None,
                      up_length=27, down_length=30, gblock_tail=None,
-                     fd_map=None, min_dist=-7, max_dist=17):
+                     fd_map=None, min_dist=-7, max_dist=14, junction_label="BSJ"):   # default max_dist now 14
     """
     Circular mode. 24‑nt target region.  Uses FD scores.
     Returns (truncated_seq, truncated_upstream, truncated_downstream, bsj_site, df)
-    Output columns: PFS Motif, PFS Score, Within BSJ, Closest distance from BSJ,
-                    Target Region, RC Target Region, guideRNA,
-                    DNA oligo for T7 IVT, GC % in sequence,
-                    Linear Sequence Overhang Similarity Percent (last)
+
+    Output columns:
+        PFS Motif, PFS Score, Closest distance from BSJ,
+        Target Region, RC Target Region, guideRNA,
+        DNA oligo for T7 IVT, GC % in sequence
     """
     terms = terms if terms is not None else DEFAULT_TERMS
     gblock_tail = gblock_tail if gblock_tail is not None else DEFAULT_GBLOCK_TAIL
@@ -189,10 +181,9 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
 
     length_downstream = len(downstream)
     joint_sequence = downstream + upstream
-    truncated_sequence = joint_sequence[length_downstream - down_length: length_downstream + up_length]
+    truncated_sequence = joint_sequence[length_downstream - down_length : length_downstream + up_length]
     truncated_upstream = upstream[:up_length]
     truncated_downstream = downstream[-17:]
-    truncated_linear_overhang = linearoverhang[-28:]
     bsj_site = downstream[-1] + upstream[0]
     search_sequence = downstream[-4:] + upstream[:up_length]
     length_diff = len(joint_sequence) - len(upstream)
@@ -203,18 +194,14 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
             bsj_distance = start_index_trunc - 4
             if not (min_dist <= bsj_distance <= max_dist):
                 continue
-            within_bsj = bsj_distance <= 1
-            start_index_long = start_index_trunc + length_diff
 
+            start_index_long = start_index_trunc + length_diff
             target_start = max(0, start_index_long - 28)
-            target_sequence = joint_sequence[target_start:start_index_long - 4]
+            target_sequence = joint_sequence[target_start : start_index_long - 4]
 
             complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
             rc_target_sequence = "".join(complement.get(base, base) for base in reversed(target_sequence))
             gc_percent = round(GC_calc(rc_target_sequence), 1)
-
-            overhang_sequence = joint_sequence[target_start:length_downstream]
-            linear_overlap_percent = round(compare_sequence_similarity(truncated_linear_overhang, overhang_sequence), 1)
 
             adjusted_sequence = term
             if len(adjusted_sequence) < 5:
@@ -231,30 +218,31 @@ def analyse_sequence(upstream, downstream, terms=None, linearoverhang="",
             results.append({
                 "PFS Motif": adjusted_sequence,
                 "PFS Score": pfs_score,
-                "Within BSJ": within_bsj,
-                "Closest distance from BSJ": bsj_distance,
+                f"Closest distance from {junction_label}": bsj_distance,
                 "Target Region": target_sequence,
                 "RC Target Region": rc_target_sequence,
                 "guideRNA": guide_rna,
                 "DNA oligo for T7 IVT": gblock_sequence,
                 "GC % in sequence": gc_percent,
-                "Linear Sequence Overhang Similarity Percent": linear_overlap_percent,
             })
 
     df = pd.DataFrame(results)
     if df.empty:
         return truncated_sequence, truncated_upstream, truncated_downstream, bsj_site, df
 
-    # Enforce column order – linear overhang last
     desired_order = [
-        "PFS Motif", "PFS Score", "Within BSJ", "Closest distance from BSJ",
-        "Target Region", "RC Target Region", "guideRNA",
-        "DNA oligo for T7 IVT", "GC % in sequence",
-        "Linear Sequence Overhang Similarity Percent"
+        "PFS Motif",
+        "PFS Score",
+        f"Closest distance from {junction_label}",
+        "Target Region",
+        "RC Target Region",
+        "guideRNA",
+        "DNA oligo for T7 IVT",
+        "GC % in sequence",
     ]
     df = df[desired_order]
     df = df.sort_values(by="PFS Score", ascending=False)
-    df = df.drop_duplicates(subset=["Closest distance from BSJ"], keep="first")
+    df = df.drop_duplicates(subset=[f"Closest distance from {junction_label}"], keep="first")
     return truncated_sequence, truncated_upstream, truncated_downstream, bsj_site, df
 # ----------------------------------------------------------------------
 # 5. Off‑target pipeline (Stage 1 + Stage 2)

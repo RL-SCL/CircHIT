@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox, filedialog
 import threading
 import os
 import pandas as pd
+import webbrowser
 from PIL import Image, ImageTk
 
 # Import backend functions
@@ -37,10 +38,10 @@ class SequenceApp(tk.Tk):
         self.custom_gblock_tail = ""
         self.fd_csv_path = tk.StringVar(value="00_inputs/Raw_PFS_FD.csv")
         self.min_dist = tk.IntVar(value=-7)
-        self.max_dist = tk.IntVar(value=17)
+        self.max_dist = tk.IntVar(value=14)
         self.auto_export = tk.BooleanVar(value=False)
         self.top_n = tk.IntVar(value=1000)
-        self.mm_cutoff = tk.IntVar(value=5)
+        self.mm_cutoff = tk.IntVar(value=3)
 
         # FD scores loaded once
         self.fd_map = {}
@@ -81,20 +82,44 @@ class SequenceApp(tk.Tk):
         self.canvas.create_text(450, 60, text="CircHIT", font=("Helvetica", 32, "bold"), fill="white")
         self.canvas.create_text(450, 110, text="gRNA Design & Off‑Target Scanner", font=("Helvetica", 14), fill="lightgray")
 
-        y_start = 180
+        # Adjusted spacing to fit six buttons nicely
+        y_start = 170
         dy = 55
-        self.canvas.create_window(450, y_start, window=ttk.Button(self, text="Circular RNA Mode", width=30,
+
+        self.canvas.create_window(450, y_start, window=ttk.Button(self, text="Circular RNA Target", width=30,
                                                                   command=self.circular_mode))
-        self.canvas.create_window(450, y_start+dy, window=ttk.Button(self, text="Linear Sequence Mode", width=30,
-                                                                     command=self.linear_mode))
-        self.canvas.create_window(450, y_start+2*dy, window=ttk.Button(self, text="Off‑Target Scan", width=30,
-                                                                       command=self.off_target_window))
-        self.canvas.create_window(450, y_start+3*dy, window=ttk.Button(self, text="Batch Circular RNA Mode", width=30,
-                                                                       command=self.batch_circular_mode))
-        self.canvas.create_window(450, y_start+4*dy, window=ttk.Button(self, text="Linear Batch Mode", width=30,
-                                                                       command=self.linear_batch_mode))
-        self.canvas.create_window(450, y_start+5*dy, window=ttk.Button(self, text="Advanced Settings", width=30,
-                                                                       command=self.advanced_settings))
+        self.canvas.create_window(450, y_start + dy, window=ttk.Button(self, text="Gene (mRNA) Target", width=30,
+                                                                       command=self.linear_mode))
+        self.canvas.create_window(450, y_start + 2 * dy, window=ttk.Button(self, text="Fusion Gene Target", width=30,
+                                                                           command=self.fusion_gene_target))
+        self.canvas.create_window(450, y_start + 3 * dy, window=ttk.Button(self, text="Off‑Target Scan", width=30,
+                                                                           command=self.off_target_window))
+        self.canvas.create_window(450, y_start + 4 * dy,
+                                  window=ttk.Button(self, text="Batch Circular RNA Mode", width=30,
+                                                    command=self.batch_circular_mode))
+        self.canvas.create_window(450, y_start + 5 * dy, window=ttk.Button(self, text="Linear Batch Mode", width=30,
+                                                                           command=self.linear_batch_mode))
+        self.canvas.create_window(450, y_start + 6 * dy, window=ttk.Button(self, text="Advanced Settings", width=30,
+                                                                           command=self.advanced_settings))
+
+    # ---------- Url Search ----------
+    def blast_selected(self, tree, df):
+        """Open NCBI BLASTN with the RC Target Region of the selected row."""
+        selection = tree.selection()
+        if not selection:
+            messagebox.showwarning("No selection", "Please select a row in the table.")
+            return
+        idx = tree.index(selection[0])
+        row = df.iloc[idx]
+        rc_target = row["RC Target Region"]
+        # Clean the sequence – just in case
+        query = rc_target.strip().upper().replace("U", "T")
+        url = (
+                "https://blast.ncbi.nlm.nih.gov/Blast.cgi?"
+                "PROGRAM=blastn&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome&QUERY="
+                + query
+        )
+        webbrowser.open(url)
 
     # ---------- Advanced Settings ----------
     def advanced_settings(self):
@@ -105,8 +130,9 @@ class SequenceApp(tk.Tk):
         # FD CSV path
         self.canvas.create_text(450, 70, text="FD Score CSV:", font=("Helvetica", 12), fill="white")
         fd_entry = ttk.Entry(self, textvariable=self.fd_csv_path, width=70)
-        self.canvas.create_window(450, 95, window=fd_entry)
-        ttk.Button(self, text="Browse", command=lambda: self.browse_fd_csv(fd_entry)).place(x=760, y=85)
+        self.canvas.create_window(350, 95, window=fd_entry)
+        browse_btn = ttk.Button(self, text="Browse", command=lambda: self.browse_fd_csv(fd_entry))
+        self.canvas.create_window(750, 85, window=browse_btn, anchor="center")
 
         # Custom motifs
         self.canvas.create_text(450, 135, text="Custom Motifs (comma-separated):", font=("Helvetica", 12), fill="white")
@@ -178,18 +204,75 @@ class SequenceApp(tk.Tk):
     # ---------- Designer modes (circular / linear) ----------
     # (These are largely unchanged except they now call the backend with fd_map and no pfs_method)
 
-    def circular_mode(self, terms=None):
-        self.internal_exon_data = ""
+    def fusion_gene_target(self, terms=None):
+        """Start the Fusion Gene Target wizard (BSJ Distal → BSJ Proximal → results)."""
         self.clear_canvas()
-        self.set_background("images/bg_upstream.png")
-        self.canvas.create_text(450, 50, text="Enter Upstream Sequence", font=("Helvetica", 20), fill="white")
+        self.set_background("images/bg_fusion_distal.png")  # custom image
+        self.canvas.create_text(450, 50, text="", font=("Helvetica", 20), fill="white")
         entry = ttk.Entry(self, width=70)
         self.canvas.create_window(450, 100, window=entry)
 
         def on_submit_upstream():
             upstream = entry.get().strip().upper()
             if not upstream:
-                messagebox.showwarning("Warning", "Please enter the upstream sequence.")
+                messagebox.showwarning("Warning", "Please enter the Fusion Distal sequence.")
+                return
+            self.ask_fusion_proximal(upstream, terms)
+
+        self.canvas.create_window(400, 150, window=ttk.Button(self, text="Next", command=on_submit_upstream))
+        self.canvas.create_window(500, 150, window=ttk.Button(self, text="Cancel", command=self.main_menu))
+
+    def ask_fusion_proximal(self, upstream, terms):
+        self.clear_canvas()
+        self.set_background("images/bg_fusion_proximal.png")
+        self.canvas.create_text(450, 50, text="", font=("Helvetica", 20), fill="white")
+        entry = ttk.Entry(self, width=70)
+        self.canvas.create_window(450, 100, window=entry)
+
+        def on_submit_downstream():
+            downstream = entry.get().strip().upper()
+            if not downstream:
+                messagebox.showwarning("Warning", "Please enter the Fusion Proximal sequence.")
+                return
+            # Go straight to analysis (no linear overhang or internal exons)
+            self.run_fusion_analysis(upstream, downstream, terms)
+
+        self.canvas.create_window(400, 150, window=ttk.Button(self, text="Next", command=on_submit_downstream))
+        self.canvas.create_window(500, 150, window=ttk.Button(self, text="Cancel", command=self.main_menu))
+
+    def run_fusion_analysis(self, upstream, downstream, terms):
+        term_list = terms if terms else (self.custom_terms if self.custom_terms else DEFAULT_TERMS)
+        gblock_tail = self.custom_gblock_tail if self.custom_gblock_tail else DEFAULT_GBLOCK_TAIL
+
+        # Use the same backend function, but with fusion junction label
+        result = analyse_sequence(
+            upstream, downstream, term_list,
+            gblock_tail=gblock_tail,
+            fd_map=self.fd_map,
+            min_dist=self.min_dist.get(),
+            max_dist=self.max_dist.get(),
+            junction_label="Fusion"
+        )
+        df = result[-1]  # last element is the DataFrame
+        self.show_results_popup("Fusion Gene Target Results", df,
+                                is_circular=False)  # use same display, but with custom title
+
+        if self.auto_export.get() and not df.empty:
+            self.export_dataframe(df)
+
+        self.return_to_menu()
+    def circular_mode(self, terms=None):
+        self.internal_exon_data = ""
+        self.clear_canvas()
+        self.set_background("images/bg_upstream.png")
+        self.canvas.create_text(450, 50, text="", font=("Helvetica", 20), fill="white")
+        entry = ttk.Entry(self, width=70)
+        self.canvas.create_window(450, 100, window=entry)
+
+        def on_submit_upstream():
+            upstream = entry.get().strip().upper()
+            if not upstream:
+                messagebox.showwarning("Warning", "")
                 return
             self.ask_downstream(upstream, terms)
 
@@ -199,76 +282,29 @@ class SequenceApp(tk.Tk):
     def ask_downstream(self, upstream, terms):
         self.clear_canvas()
         self.set_background("images/bg_downstream.png")
-        self.canvas.create_text(450, 50, text="Enter Downstream Sequence", font=("Helvetica", 20), fill="white")
+        self.canvas.create_text(450, 50, text="", font=("Helvetica", 20), fill="white")
         entry = ttk.Entry(self, width=70)
         self.canvas.create_window(450, 100, window=entry)
 
         def on_submit_downstream():
             downstream = entry.get().strip().upper()
             if not downstream:
-                messagebox.showwarning("Warning", "Please enter the downstream sequence.")
+                messagebox.showwarning("Warning", "Please enter the BSJ Proximal sequence.")
                 return
-            self.ask_linear_overhang(upstream, downstream, terms)
+            # Skip linear overhang and internal exons – go straight to analysis
+            self.run_circ_analysis(upstream, downstream, terms)
 
         self.canvas.create_window(400, 150, window=ttk.Button(self, text="Next", command=on_submit_downstream))
         self.canvas.create_window(500, 150, window=ttk.Button(self, text="Cancel", command=self.main_menu))
 
-    def ask_linear_overhang(self, upstream, downstream, terms):
-        self.clear_canvas()
-        self.set_background("images/bg_linearoverhang.png")
-        self.canvas.create_text(450, 50, text="Enter Upstream of Upstream (Linear Overhang)", font=("Helvetica", 18), fill="white")
-        entry = ttk.Entry(self, width=70)
-        self.canvas.create_window(450, 100, window=entry)
 
-        def on_submit_overhang():
-            linearoverhang = entry.get().strip().upper()
-            if not linearoverhang:
-                messagebox.showwarning("Warning", "Please enter the linear overhang.")
-                return
-            self.ask_internal_exons(upstream, downstream, linearoverhang, terms)
-
-        self.canvas.create_window(400, 150, window=ttk.Button(self, text="Next", command=on_submit_overhang))
-        self.canvas.create_window(500, 150, window=ttk.Button(self, text="Cancel", command=self.main_menu))
-
-    def ask_internal_exons(self, upstream, downstream, linearoverhang, terms):
-        self.clear_canvas()
-        self.set_background("images/bg_internalexons.png")
-        self.canvas.create_text(450, 50, text="Would you like to add internal exons?", font=("Helvetica", 18), fill="white")
-        self.canvas.create_window(370, 100, window=ttk.Button(self, text="Yes",
-                                                              command=lambda: self.get_internal_exon_loop(upstream, downstream, linearoverhang, terms)))
-        self.canvas.create_window(530, 100, window=ttk.Button(self, text="No",
-                                                              command=lambda: self.run_circ_analysis(upstream, downstream, linearoverhang, terms)))
-
-    def get_internal_exon_loop(self, upstream, downstream, linearoverhang, terms):
-        self.clear_canvas()
-        self.set_background("images/bg_internalexons.png")
-        self.canvas.create_text(450, 50, text="Enter Internal Exon", font=("Helvetica", 18), fill="white")
-        entry = ttk.Entry(self, width=70)
-        self.canvas.create_window(450, 100, window=entry)
-
-        def on_submit_exon():
-            exon = entry.get().strip().upper()
-            if exon:
-                self.internal_exon_data += exon
-            self.ask_if_last_exon(upstream, downstream, linearoverhang, terms)
-
-        self.canvas.create_window(450, 150, window=ttk.Button(self, text="Submit Exon", command=on_submit_exon))
-
-    def ask_if_last_exon(self, upstream, downstream, linearoverhang, terms):
-        self.clear_canvas()
-        self.set_background("images/bg_internalexons.png")
-        self.canvas.create_text(450, 50, text="Is this the last internal exon?", font=("Helvetica", 18), fill="white")
-        self.canvas.create_window(370, 100, window=ttk.Button(self, text="Yes",
-                                                              command=lambda: self.run_circ_analysis(upstream, downstream, linearoverhang, terms)))
-        self.canvas.create_window(530, 100, window=ttk.Button(self, text="No",
-                                                              command=lambda: self.get_internal_exon_loop(upstream, downstream, linearoverhang, terms)))
-
-    def run_circ_analysis(self, upstream, downstream, linearoverhang, terms):
+    def run_circ_analysis(self, upstream, downstream, terms):
         term_list = terms if terms else (self.custom_terms if self.custom_terms else DEFAULT_TERMS)
         gblock_tail = self.custom_gblock_tail if self.custom_gblock_tail else DEFAULT_GBLOCK_TAIL
 
+        # Note: backend analyse_sequence no longer expects linearoverhang
         result = analyse_sequence(
-            upstream, downstream, term_list, linearoverhang,
+            upstream, downstream, term_list,
             gblock_tail=gblock_tail,
             fd_map=self.fd_map,
             min_dist=self.min_dist.get(),
@@ -280,17 +316,8 @@ class SequenceApp(tk.Tk):
         if self.auto_export.get() and not df.empty:
             self.export_dataframe(df)
 
-        if self.internal_exon_data:
-            linear_df = analyse_linear_sequence(
-                self.internal_exon_data, term_list, gblock_tail,
-                fd_map=self.fd_map
-            )
-            self.show_results_popup("Internal Exon Linear Analysis", linear_df, is_circular=False)
-            if self.auto_export.get() and not linear_df.empty:
-                self.export_dataframe(linear_df)
-
+        # No internal exon analysis
         self.return_to_menu()
-
     def linear_mode(self, terms=None):
         self.clear_canvas()
         self.set_background("images/bg_linear_mode.png")
@@ -351,7 +378,7 @@ class SequenceApp(tk.Tk):
             return
         try:
             df = pd.read_csv(file_path) if file_path.endswith('.csv') else pd.read_excel(file_path)
-            required = ['name', 'upstream', 'downstream', 'linear_overhang']
+            required = ['name', 'BSJ-Distal', 'BSJ-Proximal']
             if not all(c in df.columns for c in required):
                 messagebox.showerror("Error", f"File must contain columns: {', '.join(required)}")
                 return
@@ -360,25 +387,19 @@ class SequenceApp(tk.Tk):
             all_dfs = []
             for _, row in df.iterrows():
                 name = str(row['name'])
-                upstream = str(row['upstream']).upper()
-                downstream = str(row['downstream']).upper()
-                linear_overhang = str(row['linear_overhang']).upper()
-                internal_exons = str(row.get('internal_exons', '')).upper()
+                upstream = str(row['BSJ-Distal']).upper()
+                downstream = str(row['BSJ-Proximal']).upper()
+                # No linear_overhang or internal exons
                 _, _, _, _, circ_df = analyse_sequence(
-                    upstream, downstream, term_list, linear_overhang,
-                    gblock_tail=gblock_tail, fd_map=self.fd_map,
-                    min_dist=self.min_dist.get(), max_dist=self.max_dist.get()
+                    upstream, downstream, term_list,
+                    gblock_tail=gblock_tail,
+                    fd_map=self.fd_map,
+                    min_dist=self.min_dist.get(),
+                    max_dist=self.max_dist.get()
                 )
                 if not circ_df.empty:
-                    circ_df.insert(0, "Type", "Circular")
                     circ_df.insert(0, "Sequence_Name", name)
                     all_dfs.append(circ_df)
-                if internal_exons and internal_exons != 'nan':
-                    lin_df = analyse_linear_sequence(internal_exons, term_list, gblock_tail, fd_map=self.fd_map)
-                    if not lin_df.empty:
-                        lin_df.insert(0, "Type", "Internal Exon (Linear)")
-                        lin_df.insert(0, "Sequence_Name", name)
-                        all_dfs.append(lin_df)
             if all_dfs:
                 combined = pd.concat(all_dfs, ignore_index=True)
                 self.show_results_popup("Batch Circular Results", combined, is_circular=True)
@@ -386,7 +407,6 @@ class SequenceApp(tk.Tk):
                 messagebox.showinfo("No hits", "No PFS motifs found.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to process file:\n{e}")
-
     # ---------- Result display with off‑target button ----------
     def show_results_popup(self, title, df, is_circular=False):
         popup = tk.Toplevel(self)
@@ -423,6 +443,8 @@ class SequenceApp(tk.Tk):
         btn_frame.pack(pady=5)
         ttk.Button(btn_frame, text="Export Results", command=lambda: self.export_dataframe(df)).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Check Off‑Targets for Selected", command=lambda: self.scan_selected(tree, df, is_circular)).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="BLAST Selected Sequence",
+                   command=lambda: self.blast_selected(tree, df)).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Close", command=popup.destroy).pack(side="left", padx=5)
 
     def scan_selected(self, tree, df, is_circular):
