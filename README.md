@@ -28,7 +28,10 @@ For a circular RNA, you are asked for three sequence components:
 * **Downstream sequence:** The part *before* the back‑splice junction. In the linear representation, this sits before the upstream sequence.
 * **Linear overhang:** The region further upstream of the acceptor exon (i.e. extending 5' from the upstream sequence). It is used to assess similarity between the circular target and the linear pre‑mRNA, helping to avoid guides that also match the unspliced transcript.
 
-**Example layout (linearised circle):**
+**In Canonical Sequence:**
+`5' – [linear overhang] – [upstream] – [internal exons] – [downstream] – 3'`
+
+**In Linearised Circular Sequence:**
 `5' – [downstream] – [BSJ] – [upstream] – [linear overhang] – 3'`
 
 ---
@@ -40,14 +43,12 @@ For a circular RNA, you are asked for three sequence components:
 | Column | Meaning |
 | --- | --- |
 | **Term** | The PFS motif that was found. |
-| **Adjusted Term** | Motif padded to a full 5‑mer if needed. |
 | **PFS Score** | Fold‑Depletion (FD) score. Higher = better. |
 | **Within BSJ (circ only)** | True if the PFS is within 1 nt of the BSJ. |
 | **Closest distance from BSJ** | Distance from the PFS to the BSJ. Negative values mean the motif starts in the downstream exon; positive = in the upstream. |
-| **Target Region** | The 24‑nt (circ) or 28‑nt (linear) window immediately upstream of the PFS. |
+| **Target Region** | The 24‑nt window immediately upstream of the PFS. |
 | **RC Target Region** | Reverse‑complement of the target region. **THIS IS YOUR CANDIDATE gRNA SEQUENCE.** |
 | **GC % in sequence** | GC content of the RC target. |
-| **Linear Overlap Similarity %** | How similar the target is to the linear overhang (circ only). Low values are safer. |
 | **gBlock** | Target region + constant tail (for cloning). |
 
 ### B. Off‑Target Scan Output
