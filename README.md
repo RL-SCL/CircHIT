@@ -29,16 +29,16 @@ CircHIT/
 
 For a circular RNA, you only need two sequences (linear overhang and internal exons are no longer required):
 
-* **BSJ Distal Sequence** (previously “upstream”): The exon *after* the back‑splice junction (BSJ).
+* **BSJ Distal Sequence**: The exon *after* the back‑splice junction (BSJ).
 * *Example:* For circMAP2K4(2‑4), this is exon 2.
 
 
-* **BSJ Proximal Sequence** (previously “downstream”): The exon *before* the BSJ.
+* **BSJ Proximal Sequence** : The exon *before* the BSJ.
 * *Example:* For circMAP2K4(2‑4), this is exon 4.
 
 
 
-The program joins them **downstream (proximal) → upstream (distal)** to search the junction region.
+The program joins them **proximal → distal** to search the junction region.
 
 ### Fusion Gene Target
 
